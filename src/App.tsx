@@ -78,6 +78,10 @@ export default function App() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('today');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
+  const [batchEditMode, setBatchEditMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchSoldPrice, setBatchSoldPrice] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [payModalState, setPayModalState] = useState<'closed' | 'input' | 'confirm'>('closed');
@@ -160,6 +164,10 @@ export default function App() {
 
     if (!matchesSearch) return false;
 
+    // Apply payment filter
+    if (paymentFilter === 'unpaid' && s.isPaid) return false;
+    if (paymentFilter === 'paid' && !s.isPaid) return false;
+
     // Then apply time filter
     if (timeFilter === 'all') return true;
     
@@ -187,6 +195,36 @@ export default function App() {
     
     return true;
   });
+
+  const applyBatchEdit = async () => {
+    const newPrice = parseInt(batchSoldPrice, 10);
+    if (isNaN(newPrice) || newPrice <= 0 || selectedIds.size === 0) return;
+    
+    setSaveLoading(true);
+    let count = 0;
+    try {
+        for (const id of selectedIds) {
+            const sale = sales.find(s => s.id === id);
+            if (!sale) continue;
+            
+            const cProfit = newPrice - sale.originalPrice;
+            await updateDoc(doc(db, 'sales', id), {
+                soldPrice: newPrice,
+                profit: cProfit
+            });
+            count++;
+        }
+        setStatus({ type: 'success', msg: `Updated ${count} items` });
+        setSelectedIds(new Set());
+        setBatchSoldPrice('');
+        setBatchEditMode(false);
+        setTimeout(() => setStatus(null), 3000);
+    } catch (err) {
+        setStatus({ type: 'error', msg: 'Failed to batch edit' });
+    } finally {
+        setSaveLoading(false);
+    }
+  };
 
   const totalProfit = filteredSales.reduce((sum, s) => sum + s.profit, 0);
   const totalRevenue = filteredSales.reduce((sum, s) => sum + s.soldPrice, 0);
@@ -1132,8 +1170,12 @@ FAJ-360BB	JX7628365787`;
             <div className="bg-white rounded-[40px] shadow-[0_30px_60px_rgba(0,0,0,0.03)] border border-gray-50 overflow-hidden">
               <div className="p-10 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight mb-1">Recent Ledger</h2>
-                  <p className="text-slate-400 text-sm font-medium">Tracking history for {ADMIN_EMAIL}</p>
+                  <h2 className="text-2xl font-black tracking-tight mb-3">Recent Ledger</h2>
+                  <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+                    <button onClick={() => setPaymentFilter('all')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'all' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700")}>All</button>
+                    <button onClick={() => setPaymentFilter('unpaid')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'unpaid' ? "bg-white text-amber-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Unpaid</button>
+                    <button onClick={() => setPaymentFilter('paid')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'paid' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Paid</button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="relative group">
@@ -1163,13 +1205,61 @@ FAJ-360BB	JX7628365787`;
                     <CreditCard className="w-4 h-4" />
                     I want to pay
                   </button>
+                  <button 
+                    onClick={() => {
+                        setBatchEditMode(!batchEditMode);
+                        setSelectedIds(new Set());
+                        setBatchSoldPrice('');
+                    }}
+                    className={cn("text-sm font-bold rounded-2xl px-5 py-2.5 transition flex items-center gap-2", batchEditMode ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-slate-100 text-slate-700 hover:bg-slate-200")}
+                  >
+                    Batch Edit
+                  </button>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
+                {batchEditMode && (
+                  <div className="bg-amber-50 border-b border-amber-100 px-10 py-4 flex flex-wrap items-center gap-4">
+                    <span className="text-sm font-bold text-amber-900">{selectedIds.size} selected</span>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-700/50 font-bold text-sm">Rp</span>
+                      <input 
+                        type="text" 
+                        placeholder="New Sold For" 
+                        value={batchSoldPrice ? new Intl.NumberFormat('id-ID').format(parseInt(batchSoldPrice,10)) : ''}
+                        onChange={e => setBatchSoldPrice(e.target.value.replace(/\D/g, ''))}
+                        className="bg-white border-amber-200 border text-amber-900 text-sm font-bold rounded-xl pl-8 pr-4 py-2 outline-none focus:ring-2 focus:ring-amber-400 w-40"
+                      />
+                    </div>
+                    <button 
+                      onClick={applyBatchEdit} 
+                      disabled={selectedIds.size === 0 || !batchSoldPrice || saveLoading} 
+                      className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-amber-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                    >
+                      {saveLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : "Apply to Selected"}
+                    </button>
+                  </div>
+                )}
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-[3px]">
+                      {batchEditMode && (
+                        <th className="px-6 py-6 w-10">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                            checked={selectedIds.size === filteredSales.length && filteredSales.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedIds(new Set(filteredSales.map(s => s.id)));
+                              } else {
+                                setSelectedIds(new Set());
+                              }
+                            }}
+                          />
+                        </th>
+                      )}
                       <th className="px-10 py-6">Product</th>
                       <th className="px-10 py-6">Date</th>
                       <th className="px-10 py-6">Sold For</th>
@@ -1182,7 +1272,7 @@ FAJ-360BB	JX7628365787`;
                   <tbody className="divide-y divide-gray-50">
                     {salesLoading ? (
                       <tr>
-                        <td colSpan={7} className="px-10 py-20 text-center">
+                        <td colSpan={batchEditMode ? 8 : 7} className="px-10 py-20 text-center">
                           <div className="flex flex-col items-center gap-4 text-blue-500">
                             <Loader2 className="w-8 h-8 animate-spin"/>
                             <p className="font-bold uppercase tracking-widest text-xs">Syncing with Ledger...</p>
@@ -1190,7 +1280,22 @@ FAJ-360BB	JX7628365787`;
                         </td>
                       </tr>
                     ) : filteredSales.map((sale) => (
-                      <tr key={sale.id} className={cn("group transition-colors", sale.isPaid ? "opacity-60 bg-gray-50/50" : "hover:bg-slate-50/30")}>
+                      <tr key={sale.id} className={cn("group transition-colors", sale.isPaid ? "opacity-60 bg-gray-50/50" : "hover:bg-slate-50/30", selectedIds.has(sale.id) && "bg-amber-50/30")}>
+                        {batchEditMode && (
+                          <td className="px-6 py-7">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                              checked={selectedIds.has(sale.id)}
+                              onChange={(e) => {
+                                const newSet = new Set(selectedIds);
+                                if (e.target.checked) newSet.add(sale.id);
+                                else newSet.delete(sale.id);
+                                setSelectedIds(newSet);
+                              }}
+                            />
+                          </td>
+                        )}
                         <td className={cn("px-10 py-7 font-bold text-slate-800", sale.isPaid && "line-through text-slate-400")}>{sale.itemName}</td>
                         <td className={cn("px-10 py-7 font-medium text-slate-500 whitespace-nowrap", sale.isPaid && "line-through text-slate-400")}>
                           {new Date(sale.createdAt?.toMillis?.() || Date.now()).toLocaleDateString('en-GB')}
@@ -1236,7 +1341,7 @@ FAJ-360BB	JX7628365787`;
                     ))}
                     {!salesLoading && filteredSales.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-10 py-20 text-center">
+                        <td colSpan={batchEditMode ? 8 : 7} className="px-10 py-20 text-center">
                           <div className="flex flex-col items-center gap-4 text-slate-300">
                             <Package className="w-12 h-12 opacity-50"/>
                             <p className="font-bold uppercase tracking-widest text-xs">No records found for this period</p>
