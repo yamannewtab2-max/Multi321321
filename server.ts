@@ -1,10 +1,21 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import * as admin from "firebase-admin";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
+
+// Initialize Firebase Admin for secure token verification
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: process.env.VITE_FIREBASE_PROJECT_ID
+  });
+}
 
 const AnalysisSchema = {
   type: Type.OBJECT,
@@ -45,11 +56,48 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Security Middleware
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disabled for Vite HMR in development
+    crossOriginEmbedderPolicy: false
+  }));
+  app.use(cors());
+
+  // Rate Limiting: max 100 requests per 15 minutes per IP
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 100, 
+    message: { error: "Too many requests from this IP, please try again later." }
+  });
+  app.use("/api/", limiter);
+
   // Needed to parse large base64 JSON requests 
   app.use(express.json({ limit: '10mb' }));
 
+  // Authentication Middleware
+  const authenticate = async (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized: Missing or invalid token" });
+    }
+    
+    const token = authHeader.split(" ")[1];
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      // Optional: enforce that only ADMIN_EMAIL can use the APIs
+      // if (decodedToken.email !== "yamannewtab@gmail.com") {
+      //   return res.status(403).json({ error: "Forbidden: Admin access required" });
+      // }
+      (req as any).user = decodedToken;
+      next();
+    } catch (error) {
+      console.error("Token verification failed:", error);
+      return res.status(401).json({ error: "Unauthorized: Token verification failed" });
+    }
+  };
+
   // API Routes
-  app.post("/api/analyze-receipt", async (req, res) => {
+  app.post("/api/analyze-receipt", authenticate, async (req, res) => {
     try {
       const { base64String, fileType, productsList } = req.body;
       
@@ -76,7 +124,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/analyze-list", async (req, res) => {
+  app.post("/api/analyze-list", authenticate, async (req, res) => {
     try {
       const { textList, productsList } = req.body;
       

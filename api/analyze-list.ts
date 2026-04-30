@@ -1,4 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import * as admin from "firebase-admin";
+
+// Initialize Firebase Admin for secure token verification
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: process.env.VITE_FIREBASE_PROJECT_ID
+  });
+}
 
 // Schema for Gemini
 const AnalysisSchema = {
@@ -37,6 +45,20 @@ function getAI() {
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
+  // Verify auth token
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: Missing or invalid token" });
+  }
+  
+  const token = authHeader.split(" ")[1];
+  try {
+    await admin.auth().verifyIdToken(token);
+  } catch (error) {
+    console.error("Token verification failed:", error);
+    return res.status(401).json({ error: "Unauthorized: Token verification failed" });
   }
 
   try {

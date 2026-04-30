@@ -246,11 +246,13 @@ export default function App() {
 
       const base64Data = await base64Promise;
       const base64String = base64Data.split(',')[1];
+      const token = await auth.currentUser?.getIdToken();
 
       const response = await fetch('/api/analyze-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           base64String: base64String,
@@ -336,10 +338,12 @@ export default function App() {
     setStatus(null);
 
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch('/api/analyze-list', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           textList: listText,
