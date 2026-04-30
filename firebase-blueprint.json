@@ -1,0 +1,25 @@
+{
+  "entities": {
+    "Sale": {
+      "title": "Sale Record",
+      "description": "A record of a single item sale.",
+      "type": "object",
+      "properties": {
+        "itemName": { "type": "string", "description": "The name or code of the item sold." },
+        "originalPrice": { "type": "number", "description": "The cost price of the item." },
+        "soldPrice": { "type": "number", "description": "The price the item was sold for." },
+        "profit": { "type": "number", "description": "The calculated profit (soldPrice - originalPrice)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of the sale." },
+        "userId": { "type": "string", "description": "The UID of the user who recorded the sale." },
+        "userEmail": { "type": "string", "description": "The email of the user who recorded the sale." }
+      },
+      "required": ["itemName", "originalPrice", "soldPrice", "profit", "createdAt", "userId"]
+    }
+  },
+  "firestore": {
+    "/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Collection of all sales records."
+    }
+  }
+}

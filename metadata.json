@@ -1,0 +1,6 @@
+{
+  "name": "Remix: Sales Tracker Pro",
+  "description": "A smart website to track sales, calculate profit margins, and save records to Supabase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

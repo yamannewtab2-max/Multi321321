@@ -1,0 +1,18 @@
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAdmin() {
+      return request.auth != null && 
+             request.auth.token.email == "yamannewtab@gmail.com";
+    }
+
+    match /sales/{saleId} {
+      // Direct access for the admin
+      allow read, write: if isAdmin();
+    }
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
