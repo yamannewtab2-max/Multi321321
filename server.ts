@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import * as admin from "firebase-admin";
+import admin from "firebase-admin";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -11,7 +11,7 @@ import rateLimit from "express-rate-limit";
 dotenv.config();
 
 // Initialize Firebase Admin for secure token verification
-if (!admin.apps.length) {
+if (!admin.apps?.length) {
   admin.initializeApp({
     projectId: process.env.VITE_FIREBASE_PROJECT_ID
   });
@@ -61,7 +61,10 @@ async function startServer() {
     contentSecurityPolicy: false, // Disabled for Vite HMR in development
     crossOriginEmbedderPolicy: false
   }));
-  app.use(cors());
+  app.use(cors({
+    origin: ['http://localhost:5173', 'http://localhost:3000', process.env.VITE_FRONTEND_URL || ''],
+    methods: ['GET', 'POST'],
+  }));
 
   // Rate Limiting: max 100 requests per 15 minutes per IP
   const limiter = rateLimit({
@@ -84,10 +87,12 @@ async function startServer() {
     const token = authHeader.split(" ")[1];
     try {
       const decodedToken = await admin.auth().verifyIdToken(token);
-      // Optional: enforce that only ADMIN_EMAIL can use the APIs
-      // if (decodedToken.email !== "yamannewtab@gmail.com") {
-      //   return res.status(403).json({ error: "Forbidden: Admin access required" });
-      // }
+      
+      const adminEmail = process.env.VITE_ADMIN_EMAIL || "yamannewtab@gmail.com";
+      if (decodedToken.email !== adminEmail) {
+        return res.status(403).json({ error: "Forbidden: Admin access required" });
+      }
+      
       (req as any).user = decodedToken;
       next();
     } catch (error) {

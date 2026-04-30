@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import * as admin from "firebase-admin";
+import admin from "firebase-admin";
 
 // Initialize Firebase Admin for secure token verification
-if (!admin.apps.length) {
+if (!admin.apps?.length) {
   admin.initializeApp({
     projectId: process.env.VITE_FIREBASE_PROJECT_ID
   });
@@ -55,7 +55,11 @@ export default async function handler(req: any, res: any) {
   
   const token = authHeader.split(" ")[1];
   try {
-    await admin.auth().verifyIdToken(token);
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const adminEmail = process.env.VITE_ADMIN_EMAIL || "yamannewtab@gmail.com";
+    if (decodedToken.email !== adminEmail) {
+      return res.status(403).json({ error: "Forbidden: Admin access required" });
+    }
   } catch (error) {
     console.error("Token verification failed:", error);
     return res.status(401).json({ error: "Unauthorized: Token verification failed" });
