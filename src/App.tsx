@@ -586,7 +586,11 @@ export default function App() {
       alert(`You only have ${unpaid.length} unpaid items!`);
       return;
     }
-    const shuffled = [...unpaid].sort(() => 0.5 - Math.random());
+    const shuffled = [...unpaid].sort((a,b) => {
+        const timeA = a.createdAt?.toMillis?.() || 0;
+        const timeB = b.createdAt?.toMillis?.() || 0;
+        return timeA - timeB; // Oldest first
+    });
     setSelectedToPay(shuffled.slice(0, count));
     setPayModalState('confirm');
   };
