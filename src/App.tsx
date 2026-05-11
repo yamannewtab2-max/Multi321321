@@ -27,7 +27,8 @@ import {
   CheckSquare,
   Square,
   CreditCard,
-  Copy
+  Copy,
+  Star
 } from 'lucide-react';
 import { cn, handleFirestoreError, OperationType } from './lib/utils';
 
@@ -42,6 +43,7 @@ interface SaleRecord {
   userEmail: string;
   trackingNumber?: string;
   isPaid?: boolean;
+  isYellow?: boolean;
 }
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "yamannewtab@gmail.com";
@@ -572,6 +574,18 @@ export default function App() {
     } catch (err: any) {
       console.error('Update error:', err);
       setStatus({ type: 'error', msg: 'Failed to update paid status' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const toggleYellowStatus = async (id: string, currentStatus: boolean | undefined) => {
+    setActionLoading(id);
+    try {
+      await updateDoc(doc(db, 'sales', id), { isYellow: !currentStatus });
+    } catch (err: any) {
+      console.error('Update error:', err);
+      setStatus({ type: 'error', msg: 'Failed to update yellow status' });
     } finally {
       setActionLoading(null);
     }
@@ -1294,7 +1308,7 @@ WF-14GB-D\tTESTTRACKING003`;
                         </td>
                       </tr>
                     ) : filteredSales.map((sale) => (
-                      <tr key={sale.id} className={cn("group transition-colors", sale.isPaid ? "opacity-60 bg-gray-50/50" : "hover:bg-slate-50/30", selectedIds.has(sale.id) && "bg-amber-50/30")}>
+                      <tr key={sale.id} className={cn("group transition-colors", sale.isYellow ? "bg-yellow-50" : "", sale.isPaid ? "opacity-60 bg-gray-50/50" : "hover:bg-slate-50/30", selectedIds.has(sale.id) && "bg-amber-50/30")}>
                         {batchEditMode && (
                           <td className="px-6 py-7">
                             <input 
@@ -1329,6 +1343,12 @@ WF-14GB-D\tTESTTRACKING003`;
                         </td>
                         <td className="px-10 py-7 text-right">
                           <div className="flex items-center justify-end gap-2">
+                             <button
+                               onClick={() => toggleYellowStatus(sale.id, sale.isYellow)}
+                               className={cn("p-2 rounded-xl transition-all", sale.isYellow ? "bg-yellow-200" : "bg-gray-100 hover:bg-yellow-100")}
+                             >
+                               <Star className={cn("w-4 h-4", sale.isYellow ? "text-yellow-600" : "text-gray-400")} />
+                             </button>
                             {dashboardTab === 'paymentHistory' ? (
                                 <button
                                   onClick={() => copySinglePayment(sale)}
