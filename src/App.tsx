@@ -79,6 +79,7 @@ export default function App() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('today');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
+  const [dashboardTab, setDashboardTab] = useState<'ledger' | 'paymentHistory'>('ledger');
   const [batchEditMode, setBatchEditMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchSoldPrice, setBatchSoldPrice] = useState('');
@@ -165,8 +166,12 @@ export default function App() {
     if (!matchesSearch) return false;
 
     // Apply payment filter
-    if (paymentFilter === 'unpaid' && s.isPaid) return false;
-    if (paymentFilter === 'paid' && !s.isPaid) return false;
+    if (dashboardTab === 'ledger') {
+        if (paymentFilter === 'unpaid' && s.isPaid) return false;
+        if (paymentFilter === 'paid' && !s.isPaid) return false;
+    } else if (dashboardTab === 'paymentHistory' && !s.isPaid) {
+        return false;
+    }
 
     // Then apply time filter
     if (timeFilter === 'all') return true;
@@ -617,6 +622,19 @@ export default function App() {
     alert('Copied to clipboard! Each product is on one line.');
   };
 
+  const copyAllUnpaidOrders = () => {
+    const unpaid = sales.filter(s => !s.isPaid);
+    const text = unpaid.map((s, index) => `${index + 1}. ${s.itemName} | ${s.trackingNumber || 'No Code'}`).join('\n');
+    navigator.clipboard.writeText(text);
+    alert('Copied all unpaid orders to clipboard!');
+  };
+
+  const copySinglePayment = (sale: SaleRecord) => {
+    const text = `${sale.itemName} | ${sale.trackingNumber || 'No Code'}`;
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard!');
+  };
+
   // --- BULK IMPORT UTILITY ---
   const handleBulkResetAndImport = async () => {
     if (!user || user.email !== ADMIN_EMAIL) return;
@@ -766,6 +784,16 @@ WF-14GB-D\tTESTTRACKING003`;
           
           {/* Dashboard Left */}
           <div className="lg:col-span-4 space-y-8">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-6 rounded-3xl shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-gray-50">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Paid Today</p>
+                  <p className="text-3xl font-black text-emerald-600">{sales.filter(s => s.isPaid && new Date(s.createdAt?.toMillis?.() || Date.now()).toDateString() === new Date().toDateString()).length}</p>
+              </div>
+              <div className="bg-white p-6 rounded-3xl shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-gray-50">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Pending Unpaid</p>
+                  <p className="text-3xl font-black text-amber-600">{sales.filter(s => !s.isPaid).length}</p>
+              </div>
+            </div>
             <section className="bg-white rounded-[32px] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.03)] border border-gray-50">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold tracking-tight">New Sale</h2>
@@ -1141,14 +1169,29 @@ WF-14GB-D\tTESTTRACKING003`;
             <div className="bg-white rounded-[40px] shadow-[0_30px_60px_rgba(0,0,0,0.03)] border border-gray-50 overflow-hidden">
               <div className="p-10 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight mb-3">Recent Ledger</h2>
+                  <h2 className="text-2xl font-black tracking-tight mb-3">Ledger</h2>
                   <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
-                    <button onClick={() => setPaymentFilter('all')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'all' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700")}>All</button>
-                    <button onClick={() => setPaymentFilter('unpaid')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'unpaid' ? "bg-white text-amber-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Unpaid</button>
-                    <button onClick={() => setPaymentFilter('paid')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'paid' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Paid</button>
+                    <button onClick={() => setDashboardTab('ledger')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", dashboardTab === 'ledger' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Ledger</button>
+                    <button onClick={() => setDashboardTab('paymentHistory')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", dashboardTab === 'paymentHistory' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Payment History</button>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-4">
+                  {dashboardTab === 'ledger' && ( 
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                      <button onClick={() => setPaymentFilter('all')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'all' ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700")}>All</button>
+                      <button onClick={() => setPaymentFilter('unpaid')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'unpaid' ? "bg-white text-amber-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Unpaid</button>
+                      <button onClick={() => setPaymentFilter('paid')} className={cn("px-4 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all", paymentFilter === 'paid' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Paid</button>
+                    </div>
+                  )}
+                  {dashboardTab === 'ledger' && (
+                    <button 
+                      onClick={copyAllUnpaidOrders}
+                      className="bg-slate-100 text-slate-700 font-bold rounded-2xl px-5 py-2.5 hover:bg-slate-200 transition flex items-center gap-2"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy all Unpaid
+                    </button>
+                  )}
                   <div className="relative group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 group-focus-within:text-blue-500 transition-colors" />
                     <input 
@@ -1286,19 +1329,29 @@ WF-14GB-D\tTESTTRACKING003`;
                         </td>
                         <td className="px-10 py-7 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button 
-                              onClick={() => togglePaidStatus(sale.id, sale.isPaid)}
-                              disabled={actionLoading === sale.id}
-                              className={cn(
-                                "p-2 rounded-xl transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider",
-                                sale.isPaid 
-                                  ? "bg-slate-200 text-slate-500 hover:bg-slate-300"
-                                  : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                              )}
-                            >
-                              {actionLoading === sale.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (sale.isPaid ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />)}
-                              {sale.isPaid ? "Paid" : "Mark Paid"}
-                            </button>
+                            {dashboardTab === 'paymentHistory' ? (
+                                <button
+                                  onClick={() => copySinglePayment(sale)}
+                                  className="bg-emerald-50 text-emerald-600 p-2 rounded-xl transition-all hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+                                >
+                                  <Copy className="w-4 h-4"/>
+                                  Copy
+                                </button>
+                            ) : (
+                                <button 
+                                  onClick={() => togglePaidStatus(sale.id, sale.isPaid)}
+                                  disabled={actionLoading === sale.id}
+                                  className={cn(
+                                    "p-2 rounded-xl transition-all disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider",
+                                    sale.isPaid 
+                                      ? "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                                      : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                  )}
+                                >
+                                  {actionLoading === sale.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (sale.isPaid ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />)}
+                                  {sale.isPaid ? "Paid" : "Mark Paid"}
+                                </button>
+                            )}
                             <button 
                               onClick={() => deleteSale(sale.id)}
                               disabled={deleteLoading === sale.id}
