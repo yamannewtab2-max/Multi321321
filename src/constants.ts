@@ -1,7 +1,7 @@
 export const PRODUCTS = [
-  { name: 'FAJ-106', originalPrice: 157000 },
-  { name: 'FAJ-113', originalPrice: 297000 },
-  { name: 'FAJ-360', originalPrice: 390000 },
+  { name: 'FAJ-106', originalPrice: 176000 },
+  { name: 'FAJ-113', originalPrice: 315000 },
+  { name: 'FAJ-360', originalPrice: 430000 },
   { name: 'WR-02 SW', originalPrice: 207000 },
   { name: 'WR-02 TTGW', originalPrice: 236000 },
   { name: 'WR-02  FG', originalPrice: 236000 },
