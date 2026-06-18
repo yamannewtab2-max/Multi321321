@@ -1289,11 +1289,11 @@ WF-14GB-D\tTESTTRACKING003`;
                         </th>
                       )}
                       <th className="px-10 py-6">Product</th>
-                      <th className="px-10 py-6">Date</th>
+                      <th className="px-10 py-6">Tracking</th>
                       <th className="px-10 py-6">Sold For</th>
                       <th className="px-10 py-6">Base Cost</th>
                       <th className="px-10 py-6">Net Profit</th>
-                      <th className="px-10 py-6">Tracking</th>
+                      <th className="px-10 py-6">Date</th>
                       <th className="px-10 py-6 text-right">Action</th>
                     </tr>
                   </thead>
@@ -1325,8 +1325,8 @@ WF-14GB-D\tTESTTRACKING003`;
                           </td>
                         )}
                         <td className={cn("px-10 py-7 font-bold text-slate-800", sale.isPaid && "line-through text-slate-400")}>{sale.itemName}</td>
-                        <td className={cn("px-10 py-7 font-medium text-slate-500 whitespace-nowrap", sale.isPaid && "line-through text-slate-400")}>
-                          {new Date(sale.createdAt?.toMillis?.() || Date.now()).toLocaleDateString('en-GB')}
+                        <td className={cn("px-10 py-7 font-mono text-xs text-slate-400 uppercase tracking-tighter", sale.isPaid && "line-through")}>
+                          {sale.trackingNumber || '-'}
                         </td>
                         <td className={cn("px-10 py-7 font-medium text-blue-600", sale.isPaid && "line-through text-slate-400")}>{formatCurrency(sale.soldPrice)}</td>
                         <td className={cn("px-10 py-7 font-medium text-rose-500", sale.isPaid && "line-through text-slate-400")}>{formatCurrency(sale.originalPrice)}</td>
@@ -1338,8 +1338,8 @@ WF-14GB-D\tTESTTRACKING003`;
                             {sale.profit >= 0 ? '+' : ''}{formatCurrency(sale.profit)}
                           </span>
                         </td>
-                        <td className={cn("px-10 py-7 font-mono text-xs text-slate-400 uppercase tracking-tighter", sale.isPaid && "line-through")}>
-                          {sale.trackingNumber || '-'}
+                        <td className={cn("px-10 py-7 font-medium text-slate-500 whitespace-nowrap", sale.isPaid && "line-through text-slate-400")}>
+                          {new Date(sale.createdAt?.toMillis?.() || Date.now()).toLocaleDateString('en-GB')}
                         </td>
                         <td className="px-10 py-7 text-right">
                           <div className="flex items-center justify-end gap-2">
