@@ -28,7 +28,9 @@ import {
   Square,
   CreditCard,
   Copy,
-  Star
+  Star,
+  Pencil,
+  Check
 } from 'lucide-react';
 import { cn, handleFirestoreError, OperationType } from './lib/utils';
 
@@ -85,12 +87,16 @@ export default function App() {
   const [batchEditMode, setBatchEditMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchSoldPrice, setBatchSoldPrice] = useState('');
+  const [batchBaseCost, setBatchBaseCost] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [payModalState, setPayModalState] = useState<'closed' | 'input' | 'confirm'>('closed');
   const [payCount, setPayCount] = useState<string>('');
   const [selectedToPay, setSelectedToPay] = useState<SaleRecord[]>([]);
   const [payProcessing, setPayProcessing] = useState(false);
+
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [editingBaseCost, setEditingBaseCost] = useState<string>('');
 
   // Auth Listener
   useEffect(() => {
@@ -205,7 +211,9 @@ export default function App() {
 
   const applyBatchEdit = async () => {
     const newPrice = parseInt(batchSoldPrice, 10);
-    if (isNaN(newPrice) || newPrice <= 0 || selectedIds.size === 0) return;
+    const newBaseCost = parseInt(batchBaseCost, 10);
+    if ((isNaN(newPrice) || newPrice <= 0) && (isNaN(newBaseCost) || newBaseCost <= 0)) return;
+    if (selectedIds.size === 0) return;
     
     setSaveLoading(true);
     let count = 0;
@@ -214,16 +222,27 @@ export default function App() {
             const sale = sales.find(s => s.id === id);
             if (!sale) continue;
             
-            const cProfit = newPrice - sale.originalPrice;
-            await updateDoc(doc(db, 'sales', id), {
-                soldPrice: newPrice,
-                profit: cProfit
-            });
+            const updatedSoldPrice = !isNaN(newPrice) && newPrice > 0 ? newPrice : sale.soldPrice;
+            const updatedBaseCost = !isNaN(newBaseCost) && newBaseCost > 0 ? newBaseCost : sale.originalPrice;
+            const cProfit = updatedSoldPrice - updatedBaseCost;
+            
+            const updateFields: any = {
+              profit: cProfit
+            };
+            if (!isNaN(newPrice) && newPrice > 0) {
+              updateFields.soldPrice = newPrice;
+            }
+            if (!isNaN(newBaseCost) && newBaseCost > 0) {
+              updateFields.originalPrice = newBaseCost;
+            }
+
+            await updateDoc(doc(db, 'sales', id), updateFields);
             count++;
         }
         setStatus({ type: 'success', msg: `Updated ${count} items` });
         setSelectedIds(new Set());
         setBatchSoldPrice('');
+        setBatchBaseCost('');
         setBatchEditMode(false);
         setTimeout(() => setStatus(null), 3000);
     } catch (err) {
@@ -586,6 +605,29 @@ export default function App() {
     } catch (err: any) {
       console.error('Update error:', err);
       setStatus({ type: 'error', msg: 'Failed to update yellow status' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const updateBaseCost = async (id: string, newCostStr: string) => {
+    const newPrice = parseInt(newCostStr.replace(/\D/g, ''), 10);
+    if (isNaN(newPrice) || newPrice < 0) return;
+    
+    setActionLoading(id);
+    try {
+      const sale = sales.find(s => s.id === id);
+      if (sale) {
+        const cProfit = sale.soldPrice - newPrice;
+        await updateDoc(doc(db, 'sales', id), {
+          originalPrice: newPrice,
+          profit: cProfit
+        });
+      }
+      setEditingSaleId(null);
+    } catch (err: any) {
+      console.error('Update base cost error:', err);
+      setStatus({ type: 'error', msg: 'Failed to update base cost' });
     } finally {
       setActionLoading(null);
     }
@@ -1232,12 +1274,12 @@ WF-14GB-D\tTESTTRACKING003`;
                   >
                     <CreditCard className="w-4 h-4" />
                     I want to pay
-                  </button>
-                  <button 
+                  </button>                  <button 
                     onClick={() => {
                         setBatchEditMode(!batchEditMode);
                         setSelectedIds(new Set());
                         setBatchSoldPrice('');
+                        setBatchBaseCost('');
                     }}
                     className={cn("text-sm font-bold rounded-2xl px-5 py-2.5 transition flex items-center gap-2", batchEditMode ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-slate-100 text-slate-700 hover:bg-slate-200")}
                   >
@@ -1245,7 +1287,7 @@ WF-14GB-D\tTESTTRACKING003`;
                   </button>
                 </div>
               </div>
-
+ 
               <div className="overflow-x-auto">
                 {batchEditMode && (
                   <div className="bg-amber-50 border-b border-amber-100 px-10 py-4 flex flex-wrap items-center gap-4">
@@ -1260,9 +1302,19 @@ WF-14GB-D\tTESTTRACKING003`;
                         className="bg-white border-amber-200 border text-amber-900 text-sm font-bold rounded-xl pl-8 pr-4 py-2 outline-none focus:ring-2 focus:ring-amber-400 w-40"
                       />
                     </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-700/50 font-bold text-sm">Rp</span>
+                      <input 
+                        type="text" 
+                        placeholder="New Base Cost" 
+                        value={batchBaseCost ? new Intl.NumberFormat('id-ID').format(parseInt(batchBaseCost,10)) : ''}
+                        onChange={e => setBatchBaseCost(e.target.value.replace(/\D/g, ''))}
+                        className="bg-white border-rose-200 border text-rose-900 text-sm font-bold rounded-xl pl-8 pr-4 py-2 outline-none focus:ring-2 focus:ring-rose-400 w-40"
+                      />
+                    </div>
                     <button 
                       onClick={applyBatchEdit} 
-                      disabled={selectedIds.size === 0 || !batchSoldPrice || saveLoading} 
+                      disabled={selectedIds.size === 0 || (!batchSoldPrice && !batchBaseCost) || saveLoading} 
                       className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-amber-700 disabled:opacity-50 transition-colors flex items-center gap-2"
                     >
                       {saveLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : "Apply to Selected"}
@@ -1329,7 +1381,54 @@ WF-14GB-D\tTESTTRACKING003`;
                           {sale.trackingNumber || '-'}
                         </td>
                         <td className={cn("px-10 py-7 font-medium text-blue-600", sale.isPaid && "line-through text-slate-400")}>{formatCurrency(sale.soldPrice)}</td>
-                        <td className={cn("px-10 py-7 font-medium text-rose-500", sale.isPaid && "line-through text-slate-400")}>{formatCurrency(sale.originalPrice)}</td>
+                        <td className={cn("px-10 py-7 font-medium text-rose-500", sale.isPaid && "line-through text-slate-400")}>
+                          {editingSaleId === sale.id ? (
+                            <div className="flex items-center gap-1.5 justify-start">
+                              <input 
+                                type="text"
+                                className="w-24 px-2 py-1 text-xs border border-rose-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:outline-none text-rose-600 font-bold bg-rose-50/50"
+                                value={editingBaseCost}
+                                onChange={(e) => setEditingBaseCost(e.target.value.replace(/\D/g, ''))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    updateBaseCost(sale.id, editingBaseCost);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingSaleId(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button 
+                                onClick={() => updateBaseCost(sale.id, editingBaseCost)}
+                                className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Save"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => setEditingSaleId(null)}
+                                className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 group/cost">
+                              <span>{formatCurrency(sale.originalPrice)}</span>
+                              <button
+                                onClick={() => {
+                                  setEditingSaleId(sale.id);
+                                  setEditingBaseCost(sale.originalPrice.toString());
+                                }}
+                                className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg opacity-0 group-hover/cost:opacity-100 transition-opacity"
+                                title="Edit Base Cost"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
                         <td className={cn("px-10 py-7", sale.isPaid && "line-through")}>
                           <span className={cn(
                             "font-black text-lg",
@@ -1348,6 +1447,23 @@ WF-14GB-D\tTESTTRACKING003`;
                                className={cn("p-2 rounded-xl transition-all", sale.isYellow ? "bg-yellow-200" : "bg-gray-100 hover:bg-yellow-100")}
                              >
                                <Star className={cn("w-4 h-4", sale.isYellow ? "text-yellow-600" : "text-gray-400")} />
+                             </button>
+                             <button
+                               onClick={() => {
+                                 if (editingSaleId === sale.id) {
+                                   setEditingSaleId(null);
+                                 } else {
+                                   setEditingSaleId(sale.id);
+                                   setEditingBaseCost(sale.originalPrice.toString());
+                                 }
+                               }}
+                               className={cn(
+                                 "p-2 rounded-xl transition-all",
+                                 editingSaleId === sale.id ? "bg-rose-100 text-rose-600" : "bg-gray-100 text-slate-500 hover:bg-slate-200"
+                               )}
+                               title="Edit Base Cost"
+                             >
+                               <Pencil className="w-4 h-4" />
                              </button>
                             {dashboardTab === 'paymentHistory' ? (
                                 <button
