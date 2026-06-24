@@ -60,13 +60,17 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [status, setStatus] = useState<{ type: 'error' | 'success', msg: string } | null>(null);
-  const [activeSaleTab, setActiveSaleTab] = useState<'single' | 'list' | 'multi'>('single');
+  const [activeSaleTab, setActiveSaleTab] = useState<'single' | 'list' | 'multi' | 'checker'>('single');
   const [multiTrackingNumber, setMultiTrackingNumber] = useState('');
   const [multiItems, setMultiItems] = useState<{productName: string, soldPrice: string}[]>([{productName: PRODUCTS[0].name, soldPrice: ''}]);
   const [listText, setListText] = useState<string>('');
   const [isAnalyzingList, setIsAnalyzingList] = useState(false);
   const [includeDuplicates, setIncludeDuplicates] = useState(false);
   
+  // Code checker
+  const [isCheckingCodes, setIsCheckingCodes] = useState(false);
+  const [codeCheckResult, setCodeCheckResult] = useState<{ found: string[], notFound: string[] } | null>(null);
+  const codeCheckInputRef = useRef<HTMLInputElement>(null);
   interface PendingSale {
     itemName: string;
     originalPrice: number;
@@ -352,6 +356,52 @@ export default function App() {
     } finally {
       setIsAnalyzing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCodeCheck = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCheckingCodes(true);
+    setStatus(null);
+    setCodeCheckResult(null);
+
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+
+      const base64Data = await base64Promise;
+      const base64String = base64Data.split(',')[1];
+      const token = await auth.currentUser?.getIdToken();
+
+      const response = await fetch('/api/check-codes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          base64String,
+          fileType: file.type
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Server failed to check codes");
+      }
+
+      const result = await response.json();
+      setCodeCheckResult(result);
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', msg: 'Code check failed. Try again.' });
+    } finally {
+      setIsCheckingCodes(false);
+      if (codeCheckInputRef.current) codeCheckInputRef.current.value = '';
     }
   };
 
@@ -913,9 +963,99 @@ WF-14GB-D\tTESTTRACKING003`;
                 >
                   List (AI)
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveSaleTab('checker');
+                    setPendingBulkSales(null);
+                    setCodeCheckResult(null);
+                  }}
+                  className={cn(
+                    "flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all",
+                    activeSaleTab === 'checker' ? "bg-white text-gray-900 shadow" : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  🔍 Codes
+                </button>
               </div>
 
-              {activeSaleTab === 'single' ? (
+              {activeSaleTab === 'checker' ? (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[11px] uppercase tracking-[2px] font-bold text-gray-400 ml-1">Upload Image with Codes</label>
+                    <input 
+                      type="file" 
+                      id="codeChecker" 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleCodeCheck}
+                      ref={codeCheckInputRef}
+                    />
+                    <label 
+                      htmlFor="codeChecker"
+                      className="flex items-center justify-center gap-3 w-full bg-blue-50 text-blue-600 py-6 rounded-2xl text-sm font-bold cursor-pointer hover:bg-blue-100 transition-all border-2 border-dashed border-blue-200"
+                    >
+                      {isCheckingCodes ? (
+                        <><Loader2 className="w-5 h-5 animate-spin"/> Scanning codes...</>
+                      ) : (
+                        <><Camera className="w-5 h-5"/> Tap to Upload Image</>
+                      )}
+                    </label>
+                  </div>
+
+                  {status && (
+                    <div className={cn(
+                      "p-4 rounded-xl text-sm font-bold flex items-center gap-3",
+                      status.type === 'error' ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                    )}>
+                      {status.type === 'error' ? <AlertCircle className="w-5 h-5"/> : <CheckCircle2 className="w-5 h-5"/>}
+                      {status.msg}
+                    </div>
+                  )}
+
+                  {codeCheckResult && (
+                    <div className="space-y-4 animate-in fade-in">
+                      {/* Found */}
+                      <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                          <h3 className="font-bold text-emerald-800">Found in Database ({codeCheckResult.found.length})</h3>
+                        </div>
+                        {codeCheckResult.found.length === 0 ? (
+                          <p className="text-sm text-emerald-600/60 italic">None</p>
+                        ) : (
+                          <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                            {codeCheckResult.found.map((code, i) => (
+                              <div key={i} className="flex items-center gap-2 bg-white/70 px-3 py-2 rounded-lg text-sm font-mono text-emerald-900">
+                                <span className="text-emerald-400 font-bold">{i + 1}.</span> {code}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Not Found */}
+                      <div className="bg-red-50 rounded-2xl p-5 border border-red-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                          <h3 className="font-bold text-red-800">Not Found ({codeCheckResult.notFound.length})</h3>
+                        </div>
+                        {codeCheckResult.notFound.length === 0 ? (
+                          <p className="text-sm text-red-600/60 italic">None — all codes found!</p>
+                        ) : (
+                          <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                            {codeCheckResult.notFound.map((code, i) => (
+                              <div key={i} className="flex items-center gap-2 bg-white/70 px-3 py-2 rounded-lg text-sm font-mono text-red-900">
+                                <span className="text-red-400 font-bold">{i + 1}.</span> {code}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : activeSaleTab === 'single' ? (
                 <form onSubmit={saveSale} className="space-y-6">
                   {/* ... existing single ... */}
                   <div className="space-y-2">
